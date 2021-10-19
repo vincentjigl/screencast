@@ -109,7 +109,7 @@ int main()
 			paired--;
 			if(paired <= 0)
 			{
-				if(0 == PAIRInterface_DonglePair("192.168.43.1", "AndroidAP8500", "f2a98eceeb20", "1"))
+				if(0 == PAIRInterface_DonglePair("192.168.43.1", "AndroidAP_3311", "a560d9f24e2f", "149"))
 				{
 					paired = 10000000;
 				}

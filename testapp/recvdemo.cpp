@@ -18,7 +18,7 @@ extern unsigned int crc32_lsb(unsigned int crc, const unsigned char *buffer, uns
 #ifdef ANDROID
 #include <unistd.h>
 #include <string>
-#include "../mcdec/mcdec.h"
+#include "../mcdec/avplayer.h"
 #include "nlohmann/crc32.h"
 //#include "nlohmann/json.hpp"
 //using json = nlohmann::json;
@@ -43,7 +43,7 @@ int g_delaysend = 5;
 
 FILE *g_audio_fp = NULL;
 FILE *g_video_fp[4] = {NULL};
-AVPlayer avplayer;
+AVPlayer *avplayer = NULL;
 
 //文件保存的pcm数据，可以通过pcm2wave.c提供的函数转为wave文件进行播放
 int write_audio_to_file(unsigned char *buf, int len) {
@@ -64,7 +64,7 @@ int write_video_to_file(int video_id, unsigned char *buf, int len) {
         return -1;
     }
 
-	avplayer.FeedOneH264Frame(buf, len);
+	avplayer->FeedOneH264Frame(buf, len);
     fwrite(buf, len, 1, g_video_fp[video_id]);
     fflush(g_video_fp[video_id]);
     return 1;
@@ -282,7 +282,7 @@ void OnGotDeviceName(int conn_id, int type, char *pDevName) {
 		//std::string param_json = "{\"video\":{\"rotate\":0,\"mirror\":2}}";			
 		std::string param_json = "{\"video\":{\"rotate\":0,\"mirror\":2};\"getinfo\":[\"buttonid\"]}";
 #endif
-		printf("------> param_json %s,len %d\n", param_json.c_str(),param_json.length());			
+		printf("------> param_json %s,len %lu\n", param_json.c_str(),param_json.length());			
 		crc32_lsb_init();
 		unsigned int calc32 = crc32_lsb(0xFFFFFFFF,(const unsigned char *)param_json.c_str(),param_json.length());
 		printf("------> crc32lsb:0x%x\n", calc32);			
@@ -385,7 +385,22 @@ int main(int argc, char *argv[]) {
     signal(SIGTERM, sig_action);
 
     startEwService();
-	avplayer.InitVideo();
+
+    const sp<IBinder> display = SurfaceComposerClient::getInternalDisplayToken();
+    CHECK(display != nullptr);
+    
+    DisplayInfo info;
+    CHECK_EQ(SurfaceComposerClient::getDisplayInfo(display, &info), NO_ERROR);
+    int width = info.w;
+    int height = info.h;
+	int offsetx =0;
+	int offsety =0;
+	char path[128];// "/data/test.264";
+
+
+    std::cout<<"w="<<width<<", h="<<height<<" , x="<<offsetx<<" , y="<<offsety<<", path ="<<path<<std::endl;
+	avplayer = new AVPlayer(width, height, offsetx, offsety, path);
+	avplayer->InitVideo();
 
     while (thread_exit == 0) {
 
@@ -401,7 +416,7 @@ int main(int argc, char *argv[]) {
 			MAINInterface_SenderSetup(0, calc32, param_json.c_str(),param_json.length(), OnSenderSetupCallback);*/
 
 			std::string param_json = "{\"getinfo\":[\"buttonid\"]}";			
-			printf("------> param_json %s,len %d\n", param_json.c_str(),param_json.length());			
+			printf("------> param_json %s,len %lu\n", param_json.c_str(),param_json.length());			
 			crc32_lsb_init();
 			unsigned int calc32 = crc32_lsb(0xFFFFFFFF,(const unsigned char *)param_json.c_str(),param_json.length());
 			printf("------> crc32lsb:0x%x\n", calc32);			
