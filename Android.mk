@@ -22,7 +22,7 @@ LOCAL_CFLAGS += -Wno-implicit-function-declaration
 LOCAL_CXXFLAGS += -DANDROID -fPIC -pie -fPIE 
 LOCAL_LDFLAGS += -pie -fPIE
  
-LOCAL_SRC_FILES	:= testapp/recvdemo.cpp mcdec/avplayer.cpp
+LOCAL_SRC_FILES	:= testapp/recvdemo.cpp mcdec/mcdec.cpp
 LOCAL_MODULE	:= recvdemo
 
 APP_ALLOW_MISSING_DEPS=true

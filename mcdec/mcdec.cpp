@@ -14,11 +14,11 @@ int AVPlayer::InitVideo()
 	
 	ProcessState::self()->startThreadPool();
 
-    DataSource::RegisterDefaultSniffers();
+    //android::DataSource::RegisterDefaultSniffers();
 	
 	mFormat = new AMessage;
 	
-	mLooper = new ALooper;
+	mLooper = new android::ALooper;
 	mLooper->start();
 	
     mComposerClient = new SurfaceComposerClient;
@@ -34,10 +34,10 @@ int AVPlayer::InitVideo()
 	CHECK(mControl != NULL);
     CHECK(mControl->isValid());
 
-	SurfaceComposerClient::openGlobalTransaction();
-    CHECK_EQ(mControl->setLayer(INT_MAX), (status_t)OK);
-    CHECK_EQ(mControl->show(), (status_t)OK);
-    SurfaceComposerClient::closeGlobalTransaction();
+	    SurfaceComposerClient::Transaction{}
+        .setLayer(mControl, INT_MAX)
+        .show(mControl)
+        .apply();
 	
     mSurface = mControl->getSurface();
     CHECK(mSurface != NULL);
@@ -83,11 +83,11 @@ void AVPlayer::MakeBackground()
 	
 	CHECK(mControlBG != NULL);
     CHECK(mControlBG->isValid());
-	
-	SurfaceComposerClient::openGlobalTransaction();
-	CHECK_EQ(mControlBG->setLayer(INT_MAX - 1), (status_t)OK);
-    CHECK_EQ(mControlBG->show(), (status_t)OK);
-    SurfaceComposerClient::closeGlobalTransaction();
+
+		SurfaceComposerClient::Transaction{}
+		.setLayer(mControlBG, INT_MAX -1)
+		.show(mControlBG)
+		.apply();
 	
 	sp<Surface> service = mControlBG->getSurface();
 	
@@ -133,10 +133,9 @@ void AVPlayer::CheckIfFormatChange()
 			int x = (SCREEN_WIDTH - width) / 2;
 			int y = (SCREEN_HEIGHT - height) / 2;
 			
-			SurfaceComposerClient::openGlobalTransaction();
-			mControl->setSize(width, height);
-			mControl->setPosition(x, y);
-			SurfaceComposerClient::closeGlobalTransaction();
+			SurfaceComposerClient::Transaction{}
+					.setPosition(mControl, width, height)
+					.setSize(mControl, x, y);
 		}
 	}	
 }
@@ -191,7 +190,7 @@ int AVPlayer::FeedOneH264Frame(unsigned char* frame, int size)
 	
 	CHECK_EQ(err, (status_t)OK);
 	
-	const sp<ABuffer> &dst = mBuffers[0].itemAt(index);
+	const sp<MediaCodecBuffer> &dst = mBuffers[0].itemAt(index);
 
 	CHECK_LE(size, dst->capacity());
 	
@@ -216,14 +215,12 @@ void AVPlayer::Dispose()
 	
 	
 	mRendering = false;
-	SurfaceComposerClient::openGlobalTransaction();
-    CHECK_EQ(mControl->hide(), (status_t)OK);
-	CHECK_EQ(mControlBG->hide(), (status_t)OK);
-    SurfaceComposerClient::closeGlobalTransaction();	
-	
+	SurfaceComposerClient::Transaction{}.hide(mControl);
+	SurfaceComposerClient::Transaction{}.hide(mControlBG);
+
 	mComposerClient->dispose();
-	mControl->clear();
-	mControlBG->clear();
+	mControl->release();
+	mControlBG->release();
 
 
 }

@@ -13,6 +13,7 @@
 #include <media/stagefright/foundation/AMessage.h>
 #include <media/stagefright/foundation/AString.h>
 #include <media/stagefright/DataSource.h>
+#include <media/MediaCodecBuffer.h>
 #include <media/stagefright/MediaCodec.h>
 #include <media/stagefright/MediaCodecList.h>
 #include <media/stagefright/MediaDefs.h>
@@ -94,12 +95,12 @@ public:
 	void MakeBackground();
 
 	sp<MediaCodec> mCodec;
-	Vector<sp<ABuffer> > mBuffers[2];
+	Vector<sp<MediaCodecBuffer> > mBuffers[2];
 	sp<SurfaceComposerClient> mComposerClient;
     sp<SurfaceControl> mControl;
 	sp<SurfaceControl> mControlBG;
     sp<Surface> mSurface;
-	sp<ALooper> mLooper;
+	sp<android::ALooper> mLooper;
 	sp<AMessage> mFormat;
 	
 	int mWidth;

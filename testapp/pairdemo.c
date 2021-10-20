@@ -109,11 +109,12 @@ int main()
 			paired--;
 			if(paired <= 0)
 			{
-				if(0 == PAIRInterface_DonglePair("192.168.43.1", "AndroidAP_3311", "a560d9f24e2f", "149"))
+				if(0 == PAIRInterface_DonglePair("192.168.43.132", "AndroidAP_1032", "11111111", "1"))
 				{
-					paired = 10000000;
+					//paired = 10000000;
 				}
-
+				
+				sleep(5);
 				
 				ver = PAIRInterface_GetDongleVer();
 				if(ver > 0)
@@ -124,9 +125,13 @@ int main()
 #if 0
 				if(0 == PAIRInterface_DongleUpgrade("/data/local/tmp/update.img",OnUpgradeProgress))
 				{
-					paired = 10000000;
+					PAIRInterface_RebootDongle();
+					//paired = 10000000;
 				}
 #endif
+				
+				sleep(2);
+				
 			}
 		}
 		if(g_dongle_detach_flag)

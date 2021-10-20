@@ -15,11 +15,21 @@ extern unsigned int crc32_lsb(unsigned int crc, const unsigned char *buffer, uns
 }
 #endif
 
+#ifdef WIN32
+#include <WinSock.h>
+#include <windows.h>
+#include <string>
+#include "crc32.h"
+#include "nlohmann/json.hpp"
+using json = nlohmann::json;
+#endif
+
 #ifdef ANDROID
 #include <unistd.h>
 #include <string>
-#include "../mcdec/avplayer.h"
 #include "nlohmann/crc32.h"
+//#include "mcdec/avplayer.h"
+#include "mcdec/mcdec.h"
 //#include "nlohmann/json.hpp"
 //using json = nlohmann::json;
 #pragma ("ANDROID is defined")
@@ -44,27 +54,29 @@ int g_delaysend = 5;
 FILE *g_audio_fp = NULL;
 FILE *g_video_fp[4] = {NULL};
 AVPlayer *avplayer = NULL;
-
 //文件保存的pcm数据，可以通过pcm2wave.c提供的函数转为wave文件进行播放
-int write_audio_to_file(unsigned char *buf, int len) {
-
-    if (g_audio_fp == NULL) {
-        printf("APP::OnFirstAudio\n");
-        g_audio_fp = fopen("44.1k_s16le.pcm", "wb");
+int write_audio_to_file(unsigned char *buf, int len) 
+{
+	if (g_audio_fp == NULL) 
+	{
+		printf("write_audio_to_file: err file not opened \n");
+        return -1;
     }
-
+	
     fwrite(buf, len, 1, g_audio_fp);
     fflush(g_audio_fp);
     return 1;
 }
 //文件保存的H264数据，可以使用h264分析器打开或VLC播放器播放
-int write_video_to_file(int video_id, unsigned char *buf, int len) {
-
-    if (g_video_fp[video_id] == NULL) {
+int write_video_to_file(int video_id, unsigned char *buf, int len) 
+{
+    if (g_video_fp[video_id] == NULL) 
+	{
+		printf("write_video_to_file: err file not opened \n");
         return -1;
     }
 
-	avplayer->FeedOneH264Frame(buf, len);
+    avplayer->FeedOneH264Frame(buf, len);
     fwrite(buf, len, 1, g_video_fp[video_id]);
     fflush(g_video_fp[video_id]);
     return 1;
@@ -94,16 +106,15 @@ void OnLogCallback(int level, const char *format, ...) {
 
 int OnWriteVideoData(int video_id, unsigned char *buf, int len) {
 
-    printf("OnWriteVideoData: video_id=%d, size=%d \n", video_id, len);
+    //printf("OnWriteVideoData: video_id=%d, size=%d \n", video_id, len);
     write_video_to_file(video_id, buf, len);
     return 0;
 }
 
 
 void OnWriteAudioData(unsigned char *buf, int bufSize) {
-    printf("OnWriteAudioData: size=%d \n", bufSize);
+    //printf("OnWriteAudioData: size=%d \n", bufSize);
     write_audio_to_file(buf, bufSize);
-
     return;
 }
 
@@ -206,17 +217,33 @@ int OnVideoPlayerSetup(int video_id, int conn_id) {
         g_video_fp[video_id] = fopen(filename, "wb");
     }
 
+	if (g_audio_fp == NULL) {
+        //printf("APP::OnFirstAudio\n");
+        g_audio_fp = fopen("44.1k_s16le.pcm", "wb");
+    }
+
     return 0;
 }
 
 void OnVideoPlayerCleanUp(int video_id) {
     printf("APP::OnVideoPlayerCleanUp: video_id=%d\n", video_id);
-#ifndef WIN32
-	if (g_video_fp[video_id] != NULL) {
+//#ifndef WIN32
+	if (g_video_fp[video_id] != NULL) 
+	{
         fclose(g_video_fp[video_id]);
         g_video_fp[video_id] = NULL;
+		
+    	printf("APP::OnVideoPlayerCleanUp: save video file...\n");
     }
-#endif
+//#endif
+	if (g_audio_fp != NULL) 
+	{
+        fclose(g_audio_fp);
+        g_audio_fp = NULL;
+		
+		printf("APP::OnVideoPlayerCleanUp: save audio file...\n");
+    }
+
     return;
 }
 
@@ -235,6 +262,37 @@ void OnNotifyRotate(int video_id, int rotate) {
 
 void OnNotifyDirectXRotate(int video_id, int rotate) {
     printf("APP::OnNotifyDirectXRotate: video_id=%d, rotate=%d\n", video_id, rotate);
+    return;
+}
+
+void OnNotifyDongleInfo(int connect_id, unsigned char *pinfo) 
+{
+	int pc_ver = *(int *)pinfo;
+	char pv0 = pc_ver & 0x000000ff;
+	char pv1 = (pc_ver & 0x0000ff00) >> 8;
+	char pv2 = (pc_ver & 0x00ff0000) >> 16;
+	int dongle_ver = *(int *)(pinfo+4);
+	char dv0 = dongle_ver & 0x000000ff;
+	char dv1 = (dongle_ver & 0x0000ff00) >> 8;
+	char dv2 = (dongle_ver & 0x00ff0000) >> 16;
+    printf("APP::OnNotifyDongleInfo: connect_id=%d, pc_ver=%d:%c.%c.%c,dongle_ver=%d:%c.%c.%c\n", connect_id, pc_ver,pv2,pv1,pv0,dongle_ver,dv2,dv1,dv0);
+    return;
+}
+
+void OnNotifyLostFrame(int video_id, int type) 
+{
+	switch(type)
+    {
+    	case LOST_FRAME_TYPE_FEC:
+    		printf("APP::OnNotifyLostFrame: video_id=%d, fec lost frame\n", video_id);
+			break;
+		case LOST_FRAME_TYPE_KCP:
+    		printf("APP::OnNotifyLostFrame: video_id=%d, kcp lost frame\n", video_id);
+			break;
+		default:
+    		printf("APP::OnNotifyLostFrame: video_id=%d, unknow lost frame\n", video_id);
+			break;
+	}
     return;
 }
 
@@ -261,22 +319,22 @@ void OnGotDeviceName(int conn_id, int type, char *pDevName) {
     printf("APP::OnGotDeviceName:conn_id=%d, pDevName:%s, type:%s\n", conn_id, pDevName, getDeviceTypeDscr(type));
 
 	int feature = MAINInterface_GetSndTranFeature(conn_id);
-	//if(SND_TRANS_FEATURE_FEC != feature)
-	if(SND_TRANS_FEATURE_KCP != feature)
-	//if(SND_TRANS_FEATURE_FEC_KCP != feature)	
-	{
-		MAINInterface_ResetConnectEncoder(conn_id, BJ_RES_1080P, 10, 2 * 10, ENCODER_RC_ABR, 1500);
-		
+    printf("APP::OnGotDeviceName:feature=0x%x\n", feature);
+	
+	MAINInterface_ResetConnectEncoder(conn_id, BJ_RES_1080P, 10, 2 * 10, ENCODER_RC_ABR, 1500);
+	
+	//if(!(SND_TRANS_FEATURE_FEC & feature))
+	if(!((SND_TRANS_FEATURE_FEC|SND_TRANS_FEATURE_AUDIO_FEC) & feature))
+	{		
 #if defined(WIN32)		
 		json k;
 				
-		k["getinfo"] = {"buttonid"};
+		k["getinfo"] = {"buttonid"}; 
 		//k["video"]["rotate"] = 0;
 		//k["video"]["mirror"] = 2;
 		//k["transport"]["feature"] = "fec";
-		//k["transport"]["feature"] = "kcp";
-		//k["transport"]["feature"] = "+fec+kcp";
-		//k["transport"]["on"] = 1;
+		k["transport"]["feature"] = "+fec+afec"; 
+		k["transport"]["on"] = 1;
 		std::string param_json = k.dump();
 #elif defined (ANDROID)
 		//std::string param_json = "{\"video\":{\"rotate\":0,\"mirror\":2}}";			
@@ -341,6 +399,7 @@ int startEwService() {
             .notifyConnStat = OnConnState,
             .notifyConnHostInfo = OnGotDeviceName,
             .notifyResetEncoderResult = OnResetEncoderResult,
+			.notifyDongleInfo = OnNotifyDongleInfo,
             .writeLog  =  OnLogCallback,
     };
 
@@ -351,6 +410,7 @@ int startEwService() {
             .notifyResolution = OnNotifyResolution,
             .notifyRotate= OnNotifyRotate,
 			.notifyDirectXRotate = OnNotifyDirectXRotate,
+			.notifyLostFrame = OnNotifyLostFrame,
     };
 
     AUDIO_RENDERER_CALLBACKS _AudioCallbacks = {
@@ -378,55 +438,121 @@ void sig_action(int sig) {
 }
 
 
+
+int
+net_init(void) {
+
+#ifdef WIN32
+    WSADATA wsa;
+    int res = WSAStartup(MAKEWORD(2, 2), &wsa) < 0;
+    if (res < 0) {
+        printf("WSAStartup failed with error %d", res);
+        return -1;
+    }
+#endif
+    return 0;
+}
+
+void
+net_cleanup(void) {
+#ifdef WIN32
+    WSACleanup();
+#endif
+}
+
 //avahi-publish -s  ubuntu_recv_sdk  _eshow._tcp 5353
 int main(int argc, char *argv[]) {
 
     signal(SIGINT, sig_action);
     signal(SIGTERM, sig_action);
+    net_init();
 
     startEwService();
 
     const sp<IBinder> display = SurfaceComposerClient::getInternalDisplayToken();
     CHECK(display != nullptr);
-    
+
     DisplayInfo info;
     CHECK_EQ(SurfaceComposerClient::getDisplayInfo(display, &info), NO_ERROR);
     int width = info.w;
     int height = info.h;
-	int offsetx =0;
-	int offsety =0;
-	char path[128];// "/data/test.264";
+       int offsetx =0;
+       int offsety =0;
+       char path[128];// "/data/test.264";
 
 
     std::cout<<"w="<<width<<", h="<<height<<" , x="<<offsetx<<" , y="<<offsety<<", path ="<<path<<std::endl;
-	avplayer = new AVPlayer(width, height, offsetx, offsety, path);
-	avplayer->InitVideo();
+       avplayer = new AVPlayer();//(width, height, offsetx, offsety, path);
+       avplayer->InitVideo();
 
     while (thread_exit == 0) {
+#if defined(WIN32) || defined (ANDROID)
 
-		usleep(1000*1000);
+#if defined(WIN32)
+		Sleep(1000);
 		g_delaysend--;
 		if(0 == g_delaysend)
-		{			
-			/*std::string param_json = "{\"video\":{\"rotate\":0,\"mirror\":2}}";			
+		{
+			//发送端设置
+			//json j;
+			//json k;
+			
+			//j["x264"]["profile"] = "main";
+			/**8j["video"]["rotate"] = 0;
+			j["video"]["mirror"] = 2;
+			//j["x264"]["i_level_idc"] = 40;
+			//j["getinfo"] = {"buttonid"};			
+			std::string param_json = j.dump();			
+			printf("------> param_json %s,len %d\n", param_json.c_str(),param_json.length());			
+			crc32_lsb_init();
+			unsigned int calc32 = crc32_lsb(0xFFFFFFFF,(const unsigned char *)param_json.c_str(),param_json.length());
+			printf("------> crc32lsb:0x%x\n\n", calc32);			
+			MAINInterface_SenderSetup(0, calc32, param_json.c_str(),param_json.length(), OnSenderSetupCallback);*/
+
+			/*k["getinfo"] = {"buttonid"};
+			//k["transport"]["feature"] = "fec";
+			//k["transport"]["on"] = 1;
+			std::string param_json = k.dump();			
 			printf("------> param_json %s,len %d\n", param_json.c_str(),param_json.length());			
 			crc32_lsb_init();
 			unsigned int calc32 = crc32_lsb(0xFFFFFFFF,(const unsigned char *)param_json.c_str(),param_json.length());
 			printf("------> crc32lsb:0x%x\n", calc32);			
 			MAINInterface_SenderSetup(0, calc32, param_json.c_str(),param_json.length(), OnSenderSetupCallback);*/
-
-			std::string param_json = "{\"getinfo\":[\"buttonid\"]}";			
+			
+			//MAINInterface_ConnectOperation(0, STATUS_SHARE_V);
+			
+		}
+#elif defined (ANDROID)
+		usleep(1000*1000);
+		g_delaysend--;
+		if(0 == g_delaysend)
+		{			
+			std::string param_json = "{\"video\":{\"rotate\":0,\"mirror\":2}}";			
 			printf("------> param_json %s,len %lu\n", param_json.c_str(),param_json.length());			
 			crc32_lsb_init();
 			unsigned int calc32 = crc32_lsb(0xFFFFFFFF,(const unsigned char *)param_json.c_str(),param_json.length());
 			printf("------> crc32lsb:0x%x\n", calc32);			
 			MAINInterface_SenderSetup(0, calc32, param_json.c_str(),param_json.length(), OnSenderSetupCallback);
 
+			/*std::string param_json = "{\"getinfo\":[\"buttonid\"]}";			
+			printf("------> param_json %s,len %d\n", param_json.c_str(),param_json.length());			
+			crc32_lsb_init();
+			unsigned int calc32 = crc32_lsb(0xFFFFFFFF,(const unsigned char *)param_json.c_str(),param_json.length());
+			printf("------> crc32lsb:0x%x\n", calc32);			
+			MAINInterface_SenderSetup(0, calc32, param_json.c_str(),param_json.length(), OnSenderSetupCallback);*/
+
 						
 			//g_delaysend = 5;
 		}
+#endif
+
+#else
+		sleep(1);
+#endif
     }
     stopEwService();
+
+    net_cleanup();
 
     printf("APP exit!!!\n");
 	

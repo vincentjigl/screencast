@@ -26,6 +26,11 @@ typedef void(*MainNotifyConnHostInfo)(int connect_id, int type, char *pDevName);
 //reserve
 typedef void(*MainNotifyResetEncoderResult)(int connect_id, int result);
 
+//dongle按钮信息通知
+//目前信息包含pc端版本号+dongle版本号
+//具体解析查看demo程序
+typedef void(*MainNotifyDongleInfo)(int connect_id,unsigned char *pinfo);
+
 /*
  * 日志回调函数
  * int level: LOGV 5, LOGD 4, LOGI 3, LOGW 2, LOGE 1
@@ -42,6 +47,7 @@ typedef struct {
     MainNotifyConnStat notifyConnStat;
     MainNotifyConnHostInfo notifyConnHostInfo;
     MainNotifyResetEncoderResult notifyResetEncoderResult;
+    MainNotifyDongleInfo notifyDongleInfo;
     MainLog writeLog;
 } MAINParam_st, *PMAINParam_st;
 
@@ -66,6 +72,12 @@ typedef void (*DecoderRendererNotifyRotate)(int video_id, int rotate);
 //rotate：0，90，180，270；
 typedef void (*DecoderRendererNotifyDirectxRotate)(int video_id, int rotate);
 
+#define LOST_FRAME_TYPE_FEC (1)
+#define LOST_FRAME_TYPE_KCP (2)
+//fec,kcp组帧失败丢帧
+//type:fec-1,kcp-2......
+typedef void (*DecoderRendererNotifyLostFrame)(int video_id, int type);
+
 typedef struct _DECODER_RENDERER_CALLBACKS {
     DecoderRendererSetup setup;
     DecoderRendererCleanup cleanup;
@@ -73,6 +85,7 @@ typedef struct _DECODER_RENDERER_CALLBACKS {
     DecoderRendererNotifyResolution notifyResolution;
     DecoderRendererNotifyRotate notifyRotate;
 	DecoderRendererNotifyDirectxRotate notifyDirectXRotate;
+	DecoderRendererNotifyLostFrame notifyLostFrame; 
 } DECODER_RENDERER_CALLBACKS, *PDECODER_RENDERER_CALLBACKS;
 
 //创建音频播放器通知
@@ -186,13 +199,18 @@ EWRECV_API int MAINInterface_SenderSetup(int connect_id, int crc32lsb,const char
 #define SND_TRANS_FEATURE_FEC 			(0x00000001)
 #define SND_TRANS_FEATURE_KCP 			(0x00000002)
 #define SND_TRANS_FEATURE_FEC_KCP 		(0x00000004)
+#define SND_TRANS_FEATURE_AUDIO_FEC 	(0x00000008)
+#define SND_TRANS_FEATURE_AUDIO_KCP 	(0x00000010)
+
 /*
  *发送端传输特性获取
  返回值：
+ -1:err
  0:udp
  0x00000001:FEC
  0x00000002:KCP
  0x00000004:+FEC+KCP
+ 0x00000009:VFEC+AFEC
  * */
 EWRECV_API int MAINInterface_GetSndTranFeature(int connect_id);
 
